@@ -51,6 +51,7 @@ func NewCommand() *cobra.Command {
 	cmd.PersistentFlags().BoolVar(&pprofEnabled, "enable-pprof", false, "enable pprof for profiling")
 	cmd.AddCommand(pathcontroller.NewCommand())
 	cmd.AddCommand(setup.NewCommand())
+	cmd.AddCommand(wireguardCommand())
 	return cmd
 }
 

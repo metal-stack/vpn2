@@ -7,7 +7,7 @@ package config
 import (
 	"fmt"
 
-	"github.com/caarlos0/env/v10"
+	"github.com/caarlos0/env/v11"
 	"github.com/go-logr/logr"
 
 	"github.com/gardener/vpn2/pkg/network"
@@ -24,6 +24,9 @@ type VPNServer struct {
 	IsHA                 bool           `env:"IS_HA"`
 	HAVPNClients         int            `env:"HA_VPN_CLIENTS"`
 	LocalNodeIP          string         `env:"LOCAL_NODE_IP" envDefault:"255.255.255.255"`
+	WGPublicKey          string         `env:"WIREGUARD_PUBLIC_KEY"`
+	WGPrivateKey         string         `env:"WIREGUARD_PRIVATE_KEY"`
+	WGPort               int            `env:"WIREGUARD_PORT" envDefault:"51820"`
 }
 
 func GetVPNServerConfig(log logr.Logger) (VPNServer, error) {

@@ -41,6 +41,14 @@ vpn-server-docker-image:
 vpn-client-docker-image:
 	@docker buildx build --platform=linux/$(ARCH) --build-arg DEBUG=$(DEBUG) -t $(VPN_CLIENT_IMAGE_REPOSITORY):$(VPN_CLIENT_IMAGE_TAG) -f Dockerfile --target vpn-client --rm .
 
+.PHONY: wireguard-vpn-server-docker-image
+wireguard-vpn-server-docker-image:
+	@docker buildx build --platform=linux/$(ARCH) --build-arg DEBUG=$(DEBUG) -t $(VPN_SERVER_IMAGE_REPOSITORY):$(VPN_SERVER_IMAGE_TAG) -f Dockerfile --target wireguard-server --rm .
+
+.PHONY: wireguard-vpn-client-docker-image
+wireguard-vpn-client-docker-image:
+	@docker buildx build --platform=linux/$(ARCH) --build-arg DEBUG=$(DEBUG) -t $(VPN_CLIENT_IMAGE_REPOSITORY):$(VPN_CLIENT_IMAGE_TAG) -f Dockerfile --target wireguard-client --rm .
+
 .PHONY: vpn-server-to-gardener-local
 vpn-server-to-gardener-local: vpn-server-docker-image
 	@docker tag $(VPN_SERVER_IMAGE_REPOSITORY):$(VPN_SERVER_IMAGE_TAG) $(LOCAL_VPN_SERVER_IMAGE_REPO):$(VPN_SERVER_IMAGE_TAG)

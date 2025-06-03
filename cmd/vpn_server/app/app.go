@@ -55,6 +55,7 @@ func NewCommand() *cobra.Command {
 	cmd.AddCommand(readinessCommand())
 	cmd.AddCommand(livenessCommand())
 	cmd.AddCommand(setup.NewCommand())
+	cmd.AddCommand(wireguardCommand())
 	cmd.PersistentFlags().BoolVar(&pprofEnabled, "enable-pprof", false, "enable pprof for profiling")
 	return cmd
 }
