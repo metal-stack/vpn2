@@ -50,13 +50,13 @@ wireguard-vpn-client-docker-image:
 	@docker buildx build --platform=linux/$(ARCH) --build-arg DEBUG=$(DEBUG) -t $(VPN_CLIENT_IMAGE_REPOSITORY):$(VPN_CLIENT_IMAGE_TAG) -f Dockerfile --target wireguard-client --rm .
 
 .PHONY: vpn-server-to-gardener-local
-vpn-server-to-gardener-local: vpn-server-docker-image
+vpn-server-to-gardener-local: wireguard-vpn-server-docker-image
 	@docker tag $(VPN_SERVER_IMAGE_REPOSITORY):$(VPN_SERVER_IMAGE_TAG) $(LOCAL_VPN_SERVER_IMAGE_REPO):$(VPN_SERVER_IMAGE_TAG)
 	@docker push $(LOCAL_VPN_SERVER_IMAGE_REPO):$(VPN_SERVER_IMAGE_TAG)
 	@echo "VPN server image: $(LOCAL_VPN_SERVER_IMAGE_REPO):$(VPN_SERVER_IMAGE_TAG)"
 
 .PHONY: vpn-client-to-gardener-local
-vpn-client-to-gardener-local: vpn-client-docker-image
+vpn-client-to-gardener-local: wireguard-vpn-client-docker-image
 	@docker tag $(VPN_CLIENT_IMAGE_REPOSITORY):$(VPN_CLIENT_IMAGE_TAG) $(LOCAL_VPN_CLIENT_IMAGE_REPO):$(VPN_CLIENT_IMAGE_TAG)
 	@docker push $(LOCAL_VPN_CLIENT_IMAGE_REPO):$(VPN_CLIENT_IMAGE_TAG)
 	@echo "VPN client image: $(LOCAL_VPN_CLIENT_IMAGE_REPO):$(VPN_CLIENT_IMAGE_TAG)"
