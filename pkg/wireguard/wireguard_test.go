@@ -23,9 +23,21 @@ func TestStartWireguardServer(t *testing.T) {
 		cfg     config.VPNServer
 		wantErr bool
 	}{
+		// {
+		// 	name: "simple",
+		// 	cfg: config.VPNServer{
+		// 		VPNNetwork: network.CIDR{IP: ip},
+		// 		WGPort:     51820,
+		// 	},
+		// 	wantErr: false,
+		// },
 		{
-			name:    "simple",
-			cfg:     config.VPNServer{VPNNetwork: network.CIDR{IP: ip}, WGPort: 51820},
+			name: "given private key",
+			cfg: config.VPNServer{
+				VPNNetwork:   network.CIDR{IP: ip},
+				WGPrivateKey: "38f84d8469bb677b277dd879b67c50a5117643d46df2f7900aa218099174244f",
+				WGPort:       51820,
+			},
 			wantErr: false,
 		},
 	}

@@ -81,13 +81,21 @@ func start(ctx context.Context, log logr.Logger, cfg wireguardConfig) error {
 	}
 
 	if cfg.privateKey != "" {
-		privateKey, err = wgtypes.ParseKey(cfg.privateKey)
+		pk, err := hex.DecodeString(cfg.privateKey)
+		if err != nil {
+			return err
+		}
+		privateKey, err = wgtypes.NewKey(pk)
 		if err != nil {
 			return fmt.Errorf("unable to parse private key:%w", err)
 		}
 	}
 	if cfg.publicKey != "" {
-		publicKey, err = wgtypes.ParseKey(cfg.publicKey)
+		pk, err := hex.DecodeString(cfg.publicKey)
+		if err != nil {
+			return err
+		}
+		publicKey, err = wgtypes.NewKey(pk)
 		if err != nil {
 			return fmt.Errorf("unable to parse private key:%w", err)
 		}
