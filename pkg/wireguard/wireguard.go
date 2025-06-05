@@ -2,24 +2,29 @@ package wireguard
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
+	"net"
 	"net/netip"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/gardener/vpn2/pkg/config"
 	"github.com/go-logr/logr"
 	"golang.zx2c4.com/wireguard/conn"
 	"golang.zx2c4.com/wireguard/device"
 	"golang.zx2c4.com/wireguard/tun/netstack"
-	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 )
 
 const (
-	uapiConfTpl = `private_key=%s
+	serverUapiConfTpl = `private_key=%s
 listen_port=%d
 public_key=%s
 allowed_ip=%s
 persistent_keepalive_interval=25
+`
+	clientUapiConfTpl = `private_key=%s
+public_key=%s
+allowed_ip=%s
+endpoint=%s:%d
 `
 	allowedIPs = "0.0.0.0/0"
 )
@@ -32,7 +37,9 @@ type wireguardConfig struct {
 }
 
 func StartServer(ctx context.Context, log logr.Logger, cfg config.VPNServer) error {
-	return start(ctx, log.WithName("wireguard-server"), wireguardConfig{
+	uapiConf := fmt.Sprintf(serverUapiConfTpl, cfg.WGPrivateKey, cfg.WGPort, cfg.WGPublicKey, allowedIPs)
+
+	return start(ctx, log.WithName("wireguard-server"), uapiConf, wireguardConfig{
 		ip:         cfg.VPNNetwork.IP.String(),
 		privateKey: cfg.WGPrivateKey,
 		publicKey:  cfg.WGPublicKey,
@@ -41,7 +48,18 @@ func StartServer(ctx context.Context, log logr.Logger, cfg config.VPNServer) err
 }
 
 func StartClient(ctx context.Context, log logr.Logger, cfg config.VPNClient) error {
-	return start(ctx, log.WithName("wireguard-client"), wireguardConfig{
+	ips, err := net.LookupIP(cfg.Endpoint)
+	if err != nil {
+		return err
+	}
+
+	log.Info("resolved endpoint, using first ip in slice", "endpoint", cfg.Endpoint, "ips", ips)
+
+	uapiConf := fmt.Sprintf(clientUapiConfTpl, cfg.WGPrivateKey, cfg.WGPublicKey, allowedIPs, "172.18.255.1", cfg.WGPort) // FIXME
+
+	spew.Dump(uapiConf)
+
+	return start(ctx, log.WithName("wireguard-client"), uapiConf, wireguardConfig{
 		ip:         cfg.VPNNetwork.IP.String(),
 		privateKey: cfg.WGPrivateKey,
 		publicKey:  cfg.WGPublicKey,
@@ -49,11 +67,17 @@ func StartClient(ctx context.Context, log logr.Logger, cfg config.VPNClient) err
 	})
 }
 
-func start(ctx context.Context, log logr.Logger, cfg wireguardConfig) error {
+func start(ctx context.Context, log logr.Logger, uapi string, cfg wireguardConfig) error {
 	localTunnelAddress, err := netip.ParseAddr(cfg.ip)
 	if err != nil {
 		return err
 	}
+
+	if cfg.privateKey == "" || cfg.publicKey == "" {
+		return fmt.Errorf("private and public key must be not empty")
+	}
+
+	log.Info("starting wireguard with", "privatekey", cfg.privateKey, "publickey", cfg.publicKey)
 
 	// Create a wireguard tunnel interface
 	tun, _, err := netstack.CreateNetTUN(
@@ -72,47 +96,9 @@ func start(ctx context.Context, log logr.Logger, cfg wireguardConfig) error {
 
 	log.Info("created wireguard tunnel device", "device", tunnelName)
 
-	var (
-		publicKey wgtypes.Key
-	)
-	privateKey, err := generateKeyPair()
-	if err != nil {
-		return err
-	}
-
-	if cfg.privateKey != "" {
-		pk, err := hex.DecodeString(cfg.privateKey)
-		if err != nil {
-			return err
-		}
-		privateKey, err = wgtypes.NewKey(pk)
-		if err != nil {
-			return fmt.Errorf("unable to parse private key:%w", err)
-		}
-	}
-	if cfg.publicKey != "" {
-		pk, err := hex.DecodeString(cfg.publicKey)
-		if err != nil {
-			return err
-		}
-		publicKey, err = wgtypes.NewKey(pk)
-		if err != nil {
-			return fmt.Errorf("unable to parse private key:%w", err)
-		}
-	} else {
-		publicKey = privateKey.PublicKey()
-	}
-
-	publicKeyString := hex.EncodeToString(publicKey[:])
-	privateKeyString := hex.EncodeToString(privateKey[:])
-
-	log.Info("starting wireguard with", "privatekey", privateKeyString, "publickey", publicKeyString)
-
-	uapiConf := fmt.Sprintf(uapiConfTpl, privateKeyString, cfg.port, publicKeyString, allowedIPs)
-
 	dev := device.NewDevice(tun, conn.NewDefaultBind(), device.NewLogger(device.LogLevelVerbose, ""))
 
-	err = dev.IpcSet(uapiConf)
+	err = dev.IpcSet(uapi)
 	if err != nil {
 		return fmt.Errorf("unable to set wireguard configuration:%w", err)
 	}
@@ -120,18 +106,7 @@ func start(ctx context.Context, log logr.Logger, cfg wireguardConfig) error {
 	if err != nil {
 		return fmt.Errorf("unable to bring up wireguard tunnel device:%w", err)
 	}
-
 	<-ctx.Done()
 
 	return nil
-}
-
-func generateKeyPair() (wgtypes.Key, error) {
-
-	private, err := wgtypes.GeneratePrivateKey()
-	if err != nil {
-		return wgtypes.Key{}, err
-	}
-
-	return private, nil
 }
