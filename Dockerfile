@@ -112,14 +112,15 @@ COPY --from=base /volume /
 COPY --from=gobuilder-vpn-server /build/bin/vpn-server /bin/vpn-server
 ENTRYPOINT /bin/vpn-server && openvpn --config /openvpn-server.config
 
+
 ## wireguard-server
-FROM gobuilder AS wireguard-server
-ARG TARGETARCH
+FROM scratch AS wireguard-server
+COPY --from=base /volume /
 COPY --from=gobuilder-vpn-server /build/bin/vpn-server /bin/vpn-server
 ENTRYPOINT /bin/vpn-server wireguard
 
 ## wireguard-client
-FROM gobuilder AS wireguard-client
-ARG TARGETARCH
+FROM scratch AS wireguard-client
+COPY --from=base /volume /
 COPY --from=gobuilder-vpn-client /build/bin/vpn-client /bin/vpn-client
 ENTRYPOINT /bin/vpn-client wireguard
