@@ -18,7 +18,7 @@ import (
 )
 
 func SetIPTableRules(log logr.Logger, cfg config.VPNClient) error {
-	forwardDevice := constants.TunnelDevice
+	forwardDevice := "wg0"
 	if cfg.VPNServerIndex != "" {
 		// we don't know the name of the bond0ip6tnl devices ahead of time, so we use a wildcard
 		forwardDevice = fmt.Sprintf("%s+", constants.BondDevice)

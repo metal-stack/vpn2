@@ -3,26 +3,24 @@ package wireguard
 import (
 	"context"
 	"encoding/hex"
-	"fmt"
 	"errors"
+	"fmt"
 	"net"
-	"strings"
 	"os"
+	"strings"
 
-
+	"github.com/coreos/go-iptables/iptables"
 	"github.com/gardener/vpn2/pkg/config"
+	"github.com/gardener/vpn2/pkg/constants"
+	"github.com/gardener/vpn2/pkg/network"
 	"github.com/go-logr/logr"
 	"golang.zx2c4.com/wireguard/conn"
 	"golang.zx2c4.com/wireguard/device"
 	"golang.zx2c4.com/wireguard/tun"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
-
 	"github.com/vishvananda/netlink"
 
-	"github.com/gardener/vpn2/pkg/constants"
-	"github.com/gardener/vpn2/pkg/network"
-	"github.com/coreos/go-iptables/iptables"
 )
 
 
@@ -44,36 +42,38 @@ persistent_keepalive_interval=25
 )
 
 type wireguardConfig struct {
-	ip         network.CIDR
-	publicKey  string
-	privateKey string
-	port       int
-	seedPodNetwork network.CIDR
-	podNetworks []network.CIDR
+	ip              network.CIDR
+	publicKey       string
+	privateKey      string
+	port            int
+	seedPodNetwork  network.CIDR
+	podNetworks     []network.CIDR
 	serviceNetworks []network.CIDR
-	nodeNetworks []network.CIDR
+	nodeNetworks    []network.CIDR
+	endpoint        string
 }
 
 func StartServer(ctx context.Context, log logr.Logger, cfg config.VPNServer) error {
 	return start(ctx, log.WithName("wireguard-server"), wireguardConfig{
-		ip:         cfg.VPNNetwork,
-		privateKey: cfg.WGPrivateKey,
-		publicKey:  cfg.WGPublicKey,
-		port:       cfg.WGPort,
-		seedPodNetwork: cfg.SeedPodNetwork,
-		podNetworks: cfg.PodNetworks,
+		ip:              cfg.VPNNetwork,
+		privateKey:      cfg.WGPrivateKey,
+		publicKey:       cfg.WGPublicKey,
+		port:            cfg.WGPort,
+		seedPodNetwork:  cfg.SeedPodNetwork,
+		podNetworks:     cfg.PodNetworks,
 		serviceNetworks: cfg.ServiceNetworks,
-		nodeNetworks: cfg.NodeNetworks,
+		nodeNetworks:    cfg.NodeNetworks,
 	})
 }
 
 func StartClient(ctx context.Context, log logr.Logger, cfg config.VPNClient) error {
 	return start(ctx, log.WithName("wireguard-client"), wireguardConfig{
-		ip:         cfg.VPNNetwork,
-		privateKey: cfg.WGPrivateKey,
-		publicKey:  cfg.WGPublicKey,
-		port:       cfg.WGPort,
+		ip:             cfg.VPNNetwork,
+		privateKey:     cfg.WGPrivateKey,
+		publicKey:      cfg.WGPublicKey,
+		port:           cfg.WGPort,
 		seedPodNetwork: cfg.SeedPodNetwork,
+		endpoint:       cfg.Endpoint,
 	})
 }
 
@@ -130,7 +130,23 @@ func start(ctx context.Context, log logr.Logger, cfg wireguardConfig) error {
 
 	log.Info("starting wireguard with", "privatekey", privateKeyString, "publickey", publicKeyString)
 
-	uapiConf := fmt.Sprintf(uapiClientConfTpl, privateKeyString, cfg.port, publicKeyString, allowedIPs, "172.18.255.1:"+fmt.Sprintf("%d", cfg.port))
+	var endpointIP string
+	if cfg.endpoint != "" {
+		host, port, err := net.SplitHostPort(cfg.endpoint)
+		if err != nil {
+			// If no port is specified, treat the whole string as host
+			host = cfg.endpoint
+			port = fmt.Sprintf("%d", cfg.port)
+		}
+		ips, err := net.LookupIP(host)
+		if err != nil || len(ips) == 0 {
+			return fmt.Errorf("failed to resolve endpoint %s: %w", host, err)
+		}
+		// Use the first resolved IP
+		endpointIP = net.JoinHostPort(ips[0].String(), port)
+	}
+
+	uapiConf := fmt.Sprintf(uapiClientConfTpl, privateKeyString, cfg.port, publicKeyString, allowedIPs, endpointIP)
 	if server {
 		uapiConf = fmt.Sprintf(uapiServerConfTpl, privateKeyString, cfg.port, publicKeyString, allowedIPs)
 	}
@@ -139,10 +155,7 @@ func start(ctx context.Context, log logr.Logger, cfg wireguardConfig) error {
 
 	dev := device.NewDevice(tunDev, conn.NewDefaultBind(), device.NewLogger(device.LogLevelVerbose, ""))
 
-	
 	log.Info("Device started")
-
-
 
 	err = dev.IpcSet(uapiConf)
 	if err != nil {
@@ -152,19 +165,18 @@ func start(ctx context.Context, log logr.Logger, cfg wireguardConfig) error {
 	// Add IP address to wg0
 	link, err := netlink.LinkByName("wg0")
 	if err != nil {
-			return fmt.Errorf("failed to get wg0 link: %w", err)
+		return fmt.Errorf("failed to get wg0 link: %w", err)
 	}
 
 	addr := &netlink.Addr{IPNet: cfg.ip.ToIPNet()}
 	if err := netlink.AddrAdd(link, addr); err != nil {
-			return fmt.Errorf("failed to add address %s to wg0: %w", cfg.ip, err)
+		return fmt.Errorf("failed to add address %s to wg0: %w", cfg.ip, err)
 	}
 
 	err = dev.Up()
 	if err != nil {
 		return fmt.Errorf("unable to bring up wireguard tunnel device:%w", err)
 	}
-
 
 	if cfg.podNetworks != nil /*&& cfg.nodeNetworks != nil && cfg.serviceNetworks != nil*/ {
 		// var networks []string
@@ -179,7 +191,7 @@ func start(ctx context.Context, log logr.Logger, cfg wireguardConfig) error {
 		// 		networks = append(networks, nw.String())
 		// 	}
 		// }
-		
+
 		networks := []string{
 			network.ParseIPNetIgnoreError(constants.ShootPodNetworkMapped).String(),
 			network.ParseIPNetIgnoreError(constants.ShootServiceNetworkMapped).String(),
@@ -230,9 +242,6 @@ func generateKeyPair() (wgtypes.Key, error) {
 
 func runFirewallCommand(log logr.Logger, device, mode string, networks []string, seedPodNetwork string) error {
 
-
-	// Firewall subcommand is called indirectly from openvpn. As PATH env variables seems not to be set,
-	// it is injected here.
 	if err := os.Setenv("PATH", "/sbin"); err != nil {
 		return fmt.Errorf("setting PATH environment variable failed: %w", err)
 	}

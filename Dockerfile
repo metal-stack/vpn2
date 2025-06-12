@@ -117,10 +117,10 @@ ENTRYPOINT /bin/vpn-server && openvpn --config /openvpn-server.config
 FROM scratch AS wireguard-server
 COPY --from=base /volume /
 COPY --from=gobuilder-vpn-server /build/bin/vpn-server /bin/vpn-server
-ENTRYPOINT /bin/vpn-server wireguard
+ENTRYPOINT /bin/vpn-server && /bin/vpn-server wireguard
 
 ## wireguard-client
 FROM scratch AS wireguard-client
 COPY --from=base /volume /
 COPY --from=gobuilder-vpn-client /build/bin/vpn-client /bin/vpn-client
-ENTRYPOINT /bin/vpn-client wireguard
+ENTRYPOINT /bin/vpn-client && /bin/vpn-client wireguard
