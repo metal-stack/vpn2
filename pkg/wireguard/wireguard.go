@@ -20,9 +20,7 @@ import (
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
 	"github.com/vishvananda/netlink"
-
 )
-
 
 const (
 	uapiServerConfTpl = `private_key=%s
@@ -60,9 +58,9 @@ func StartServer(ctx context.Context, log logr.Logger, cfg config.VPNServer) err
 		publicKey:       cfg.WGPublicKey,
 		port:            cfg.WGPort,
 		seedPodNetwork:  cfg.SeedPodNetwork,
-		podNetworks:     cfg.PodNetworks,
-		serviceNetworks: cfg.ServiceNetworks,
-		nodeNetworks:    cfg.NodeNetworks,
+		podNetworks:     cfg.ShootPodNetworks,
+		serviceNetworks: cfg.ShootServiceNetworks,
+		nodeNetworks:    cfg.ShootNodeNetworks,
 	})
 }
 
