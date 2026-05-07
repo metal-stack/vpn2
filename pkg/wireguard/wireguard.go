@@ -75,9 +75,15 @@ func StartClient(ctx context.Context, log logr.Logger, cfg config.VPNClient) err
 	})
 }
 
+// We configure a smaller MTU than defaultMTU (1420),
+// because otherwise we see a lot of the following errors in the vpn-shoot-client
+// Failed to send data packets: write udp 0.0.0.0:51820: sendmmsg: message too long
+// Also the performance from the seed -> shoot is horrible.
+const wireguardInterfaceMTU = 1280
+
 func start(ctx context.Context, log logr.Logger, cfg wireguardConfig) error {
 
-	tunDev, err := tun.CreateTUN("wg0", device.DefaultMTU)
+	tunDev, err := tun.CreateTUN("wg0", wireguardInterfaceMTU)
 	if err != nil {
 		return fmt.Errorf("unable to create the wireguard interface: %w", err)
 	}
